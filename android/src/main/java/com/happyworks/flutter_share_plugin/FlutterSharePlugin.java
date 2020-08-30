@@ -2,6 +2,8 @@ package com.happyworks.flutter_share_plugin;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.text.TextUtils;
 import android.util.Log;
@@ -10,6 +12,7 @@ import android.webkit.MimeTypeMap;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
+import java.util.List;
 
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -22,7 +25,6 @@ import io.flutter.plugin.common.PluginRegistry.Registrar;
  */
 public class FlutterSharePlugin implements MethodCallHandler {
     private final String FLUTTER_SHARE_TAG = "FlutterShare";
-    //    private final static String FILE_PROVIDER_NAME = "FlutterShareFilePathProvider";
     private Registrar mRegistrar;
     private Context mContext;
 
@@ -70,7 +72,6 @@ public class FlutterSharePlugin implements MethodCallHandler {
 
         Log.d(FLUTTER_SHARE_TAG, "Sharing textContent / fileUrl --> " + content + " / " + fileUrl);
         try {
-
             // create intent to share something to other apps
             // and add flags to clear previous calls
             final Intent intent = new Intent();
@@ -85,14 +86,25 @@ public class FlutterSharePlugin implements MethodCallHandler {
 
             // show chooser UI with share intent and title
             final Intent chooserIntent = Intent.createChooser(intent, title);
+
+            if (!TextUtils.isEmpty(fileUrl)) {
+                final Uri fileUri = getFileUri(fileUrl);
+                PackageManager packageManager = mRegistrar.context().getApplicationContext().getPackageManager();
+                List<ResolveInfo> resInfoList = packageManager.queryIntentActivities(chooserIntent, PackageManager.MATCH_DEFAULT_ONLY);
+
+                for (ResolveInfo resolveInfo : resInfoList) {
+                    String packageName = resolveInfo.activityInfo.packageName;
+                    mRegistrar.context().getApplicationContext().grantUriPermission(packageName, fileUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                }
+            }
+
             chooserIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
             chooserIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             mContext.startActivity(chooserIntent);
 
             // notify that the process of sharing is successful
-            // NOTE: this plugin can only provide functionality upto showing share UI
+            // NOTE: this plugin can only provide functionality up to showing share UI
             resultStatus = true;
-
         } catch (final Exception ex) {
             Log.e(FLUTTER_SHARE_TAG, "Error: while sharing the contents:", ex);
             result.error("Error: while sharing the contents:", ex.getLocalizedMessage(), null);
@@ -125,7 +137,6 @@ public class FlutterSharePlugin implements MethodCallHandler {
         Log.d(FLUTTER_SHARE_TAG, "addFileExtrasInIntent: file path--> " + filePath);
         if (!TextUtils.isEmpty(filePath)) {
             Uri fileUri = getFileUri(filePath);
-//            final Uri fileUri = Uri.parse(filePath);
 
             final File file = new File(filePath);
 
@@ -168,7 +179,6 @@ public class FlutterSharePlugin implements MethodCallHandler {
      * @param filePath string form of absolute path of the file to be shared
      */
     private Uri getFileUri(final String filePath) {
-
         // create file from from the file path
         final File file = new File(filePath);
         Log.d(FLUTTER_SHARE_TAG, "getFileUri: file name:" + file.getName());
